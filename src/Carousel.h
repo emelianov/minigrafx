@@ -30,7 +30,7 @@
 #include <Arduino.h>
 #include "MiniGrafx.h"
 
-//#define DEBUG_CAROUSEL(...) Serial.printf( __VA_ARGS__ )
+//#define DEBUG_CAROUSEL(format, ...) Serial.printf_P(PSTR(format), ##__VA_ARGS__ )
 
 #ifndef DEBUG_CAROUSEL
 #define DEBUG_CAROUSEL(...)

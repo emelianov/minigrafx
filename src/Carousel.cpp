@@ -201,8 +201,9 @@ int8_t Carousel::update(){
     if (this->autoTransition && this->state.lastUpdate != 0) this->state.ticksSinceLastStateSwitch += ceil(-timeBudget / this->updateInterval);
 
     this->state.lastUpdate = frameStart;
-    this->tick();
+    //this->tick();
   }
+  this->tick();
   return this->updateInterval - (millis() - frameStart);
 }
 

@@ -51,7 +51,8 @@ MiniGrafx::MiniGrafx(DisplayDriver *driver, uint8_t bitsPerPixel, uint16_t *pale
   initializeBuffer();
 }
 
-void MiniGrafx::initializeBuffer() {
+void MiniGrafx::initializeBuffer(uint8_t* preallocated) {
+  if (buffer) return;
   this->bitMask = (1 << bitsPerPixel) - 1;
   this->pixelsPerByte = 8 / bitsPerPixel;
   // bitsPerPixel: 8, pixPerByte: 1, 0  1 = 2^0
@@ -84,9 +85,11 @@ void MiniGrafx::initializeBuffer() {
 
 
   this->bufferSize = this->width * this->height / (pixelsPerByte);
+  if (preallocated) this->buffer = preallocated;
+  else
   this->buffer = (uint8_t*) malloc(sizeof(uint8_t) * bufferSize);
   if(!this->buffer) {
-    Serial.println("[DEBUG_MINI_GRAFX][init] Not enough memory to create display\n");
+    DEBUG_MINI_GRAFX("[DEBUG_MINI_GRAFX][init] Not enough memory to create display\n");
   }
 }
 
@@ -133,6 +136,7 @@ void MiniGrafx::setTransparentColor(uint16_t transparentColor) {
 }
 
 void MiniGrafx::drawLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1) {
+  MINI_GRAFX_FAILSAFE
   int16_t steep = abs(y1 - y0) > abs(x1 - x0);
   if (steep) {
     _swap_int16_t(x0, y0);
@@ -396,9 +400,9 @@ void MiniGrafx::setFontFile(String fileName) {
   fontFile.close();
   fontFile = SPIFFS.open(fileName, "r");
   if (!fontFile) {
-    Serial.println("Could not open font file " + fileName);
+    DEBUG_MINI_GRAFX("Could not open font file %s\n", fileName.c_str());
   } else {
-    Serial.println("Set font file " + fileName);
+    DEBUG_MINI_GRAFX("Set font file %s\n", fileName.c_str());
   }
 }
 
@@ -562,10 +566,15 @@ void MiniGrafx::clear() {
 }
 
 void MiniGrafx::commit() {
-  this->driver->writeBuffer(buffer, bitsPerPixel, palette, 0, 0, this->width, this->height);
+  commit(0, 0);
 }
 
 void MiniGrafx::commit(uint16_t xPos, uint16_t yPos) {
+  cbCommit(this, xPos, yPos);
+  // this->driver->writeBuffer(buffer, bitsPerPixel, palette, xPos, yPos, this->width, this->height);
+}
+
+void MiniGrafx::realCommit(uint16_t xPos, uint16_t yPos) {
   this->driver->writeBuffer(buffer, bitsPerPixel, palette, xPos, yPos, this->width, this->height);
 }
 
@@ -591,21 +600,24 @@ void MiniGrafx::drawXbm(int16_t xMove, int16_t yMove, int16_t width, int16_t hei
     }
   }
 }
-void MiniGrafx::drawBmpFromFile(String filename, uint8_t xMove, uint16_t yMove) {
-  Serial.println("In drawBmpFromFile");
+#define MG_BUF_SIZE 720
+void MiniGrafx::drawBmpFromFile(String filename, uint8_t xMove, uint16_t yMove, bool directWrite) {
+  DEBUG_MINI_GRAFX("In drawBmpFromFile\n");
   File     bmpFile;
   int      bmpWidth, bmpHeight;   // W+H in pixels
   uint8_t  bmpDepth;              // Bit depth (currently must be 24)
   uint32_t bmpImageoffset;        // Start of image data in file
   uint32_t rowSize;               // Not always = bmpWidth; may have padding
-  uint8_t  sdbuffer[3*20]; // pixel buffer (R+G+B per pixel)
-  uint8_t  buffidx = sizeof(sdbuffer); // Current position in sdbuffer
+  //uint8_t  sdbuffer[3*240]; // pixel buffer (R+G+B per pixel)
+  uint8_t* sdbuffer;
+  uint16_t  buffidx = sizeof(sdbuffer); // Current position in sdbuffer
   boolean  goodBmp = false;       // Set to true on valid header parse
   boolean  flip    = true;        // BMP is stored bottom-to-top
   int      w, h, row, col;
   uint8_t  r, g, b;
   uint32_t pos = 0, startTime = millis();
   uint16_t paletteRGB[1 << bitsPerPixel][3];
+  sdbuffer = (uint8_t*)malloc(MG_BUF_SIZE);
   for (int i = 0; i < 1 << bitsPerPixel; i++) {
     paletteRGB[i][0] = 255 * (palette[i] & 0xF800 >> 11) / 31;
     paletteRGB[i][1] = 255 * (palette[i] & 0x7E0 >> 5) / 63;
@@ -622,15 +634,14 @@ void MiniGrafx::drawBmpFromFile(String filename, uint8_t xMove, uint16_t yMove) 
   bmpFile = SPIFFS.open(filename, "r");
   // Open requested file on SD card
   if (!bmpFile) {
-    Serial.print(F("File not found"));
+    DEBUG_MINI_GRAFX("File not found\n");
     return;
   }
 
   // Parse BMP header
   if(read16(bmpFile) == 0x4D42) { // BMP signature
-    //Serial.print(F("File size: "));
     uint32_t filesize = read32(bmpFile);
-    //Serial.println(filesize);
+    //DEBUG_MINI_GRAFX("File size: %d\n", filesize);
     (void)read32(bmpFile); // Read & ignore creator bytes
     bmpImageoffset = read32(bmpFile); // Start of image data
     //Serial.print(F("Image Offset: ")); Serial.println(bmpImageoffset, DEC);
@@ -641,7 +652,7 @@ void MiniGrafx::drawBmpFromFile(String filename, uint8_t xMove, uint16_t yMove) 
     bmpHeight = read32(bmpFile);
     if(read16(bmpFile) == 1) { // # planes -- must be '1'
       bmpDepth = read16(bmpFile); // bits per pixel
-      Serial.print(F("Bit Depth: ")); Serial.println(bmpDepth);
+      DEBUG_MINI_GRAFX("Bit Depth: %d\n", bmpDepth);
       if((read32(bmpFile) == 0)) { // 0 = uncompressed
 
 
@@ -661,7 +672,7 @@ void MiniGrafx::drawBmpFromFile(String filename, uint8_t xMove, uint16_t yMove) 
           bmpHeight = -bmpHeight;
           flip      = false;
         }
-
+        DEBUG_MINI_GRAFX("Flip: %d\n", flip)
         // Crop area to be loaded
         w = bmpWidth;
         h = bmpHeight;
@@ -678,19 +689,22 @@ void MiniGrafx::drawBmpFromFile(String filename, uint8_t xMove, uint16_t yMove) 
             // and scanline padding.  Also, the seek only takes
             // place if the file position actually needs to change
             // (avoids a lot of cluster math in SD library).
-            if(flip) // Bitmap is stored bottom-to-top order (normal BMP)
-              pos = bmpImageoffset + (bmpHeight - 1 - row) * rowSize;
-            else     // Bitmap is stored top-to-bottom
+          //  if(flip) // Bitmap is stored bottom-to-top order (normal BMP)
+          //    pos = bmpImageoffset + (bmpHeight - 1 - row) * rowSize;
+          //  else     // Bitmap is stored top-to-bottom
               pos = bmpImageoffset + row * rowSize;
             if(bmpFile.position() != pos) { // Need seek?
               bmpFile.seek(pos, SeekSet);
-              buffidx = sizeof(sdbuffer); // Force buffer reload
+              //buffidx = sizeof(sdbuffer); // Force buffer reload
+              buffidx = MG_BUF_SIZE; // Force buffer reload
             }
-
+            uint16_t rowBuffer[w];
             for (col=0; col<w; col++) { // For each pixel...
               // Time to read more pixel data?
-              if (buffidx >= sizeof(sdbuffer)) { // Indeed
-                bmpFile.read(sdbuffer, sizeof(sdbuffer));
+              //if (buffidx >= sizeof(sdbuffer)) { // Indeed
+              if (buffidx >= MG_BUF_SIZE) { // Indeed
+                //bmpFile.read(sdbuffer, sizeof(sdbuffer));
+                bmpFile.read(sdbuffer, MG_BUF_SIZE);
                 buffidx = 0; // Set index to beginning
               }
 
@@ -698,22 +712,27 @@ void MiniGrafx::drawBmpFromFile(String filename, uint8_t xMove, uint16_t yMove) 
               b = sdbuffer[buffidx++];
               g = sdbuffer[buffidx++];
               r = sdbuffer[buffidx++];
-
-              uint32_t minDistance = 99999999L;
-              for (int i = 0; i < (1 << bitsPerPixel); i++) {
-                int16_t rd = (r-paletteRGB[i][0]);
-                int16_t gd = (g-paletteRGB[i][1]);
-                int16_t bd = (b-paletteRGB[i][2]);
-                uint32_t distance = rd * rd + gd * gd + bd * bd;
-                if (distance < minDistance) {
-                  setColor(i);
-                  minDistance = distance;
+              if (true || bitsPerPixel == 16) {
+                uint16_t color = ((g & 0xF8) << 8) | ((b & 0xFC) << 3) | (r >> 3);
+                //this->driver->writeBuffer((uint8_t*)&color, 16, nullptr, xMove+col, yMove+row, 2, 2);
+              } else {
+                uint32_t minDistance = 99999999L;
+                for (int i = 0; i < (1 << bitsPerPixel); i++) {
+                  int16_t rd = (r-paletteRGB[i][0]);
+                  int16_t gd = (g-paletteRGB[i][1]);
+                  int16_t bd = (b-paletteRGB[i][2]);
+                  uint32_t distance = rd * rd + gd * gd + bd * bd;
+                  if (distance < minDistance) {
+                    setColor(i);
+                    minDistance = distance;
+                  }
                 }
-              }
-              setPixel(col + xMove, row + yMove);
+                if (!directWrite) setPixel(col + xMove, row + yMove);
               //_tft->pushColor(_tft->color565(r,g,b));
-              yield();
+                //yield();
+              }
             } // end pixel
+            if (directWirte) this->driver->writeBuffer((uint8_t*)&rowBuffer, 16, nullptr, xMove, yMove+row, w, 2);
           } // end scanline
         } else if (bmpDepth == 1) {
 
@@ -721,10 +740,12 @@ void MiniGrafx::drawBmpFromFile(String filename, uint8_t xMove, uint16_t yMove) 
 
       } // end goodBmp
     }
+    free(sdbuffer);
+    DEBUG_MINI_GRAFX("Bmp processing time: %lu\n", (millis() - startTime));
   }
 
   bmpFile.close();
-  if(!goodBmp) Serial.println(F("BMP format not recognized."));
+  if(!goodBmp) DEBUG_MINI_GRAFX("BMP format not recognized.\n");
 }
 
 void MiniGrafx::drawBmpFromPgm(const char *bmp, uint8_t x, uint16_t y) {
@@ -855,6 +876,7 @@ void MiniGrafx::drawBmpFromPgm(const char *bmp, uint8_t x, uint16_t y) {
             if (bitsPerPixel == 16) {
               uint16_t color = ((g & 0xF8) << 8) | ((b & 0xFC) << 3) | (r >> 3);
               setColor(color);
+              //this->driver->writeBuffer((uint8_t*)&color, 16, nullptr, x+col, y+row, 1, 1);
             } else {
               uint16_t color = (b + g + r) / (3 * 16);
               setColor(color);
@@ -885,14 +907,14 @@ void MiniGrafx::drawBmpFromPgm(const char *bmp, uint8_t x, uint16_t y) {
   }
 
   //bmpFile.close();
-  if(!goodBmp) Serial.println(F("BMP format not recognized."));
+  if(!goodBmp) DEBUG_MINI_GRAFX("BMP format not recognized.\n");
 }
 
 void MiniGrafx::drawPalettedBitmapFromPgm(uint16_t xMove, uint16_t yMove, const char *palBmp) {
   uint8_t version = pgm_read_byte(palBmp);
   uint8_t bmpBitDepth = pgm_read_byte(palBmp + 1);
   if (bmpBitDepth != bitsPerPixel) {
-    Serial.println("Bmp has wrong bit depth");
+    //DEBUG_MINI_GRAFX("Bmp has wrong bit depth\n");
     return;
   }
   uint16_t width = pgm_read_byte(palBmp + 2) << 8 | pgm_read_byte(palBmp + 3);
@@ -937,10 +959,10 @@ void MiniGrafx::drawPalettedBitmapFromPgm(uint16_t xMove, uint16_t yMove, const 
 }
 
 void MiniGrafx::drawPalettedBitmapFromFile(uint16_t xMove, uint16_t yMove, String fileName) {
-  Serial.println("Drawing " + fileName);
+  DEBUG_MINI_GRAFX("Drawing %s\n", fileName.c_str());
   File file = SPIFFS.open(fileName, "r");
   if (!file) {
-    Serial.print("File " + fileName + " not found");
+    DEBUG_MINI_GRAFX("File %s not found\n", fileName.c_str());
     return;
   }
   uint32_t fileSize = file.size();
@@ -950,16 +972,13 @@ void MiniGrafx::drawPalettedBitmapFromFile(uint16_t xMove, uint16_t yMove, Strin
   uint8_t version = buf[0];
   uint8_t bmpBitDepth = buf[1];
   if (bmpBitDepth != bitsPerPixel) {
-    Serial.println("Bmp has wrong bit depth");
+    DEBUG_MINI_GRAFX("Bmp has wrong bit depth\n");
     return;
   }
   uint16_t width = buf[2] << 8 | buf[3];
   uint16_t height = buf[4] << 8 | buf[5];
 
-  Serial.println("Version:" + String(version));
-  Serial.println("BitDept:" + String(bmpBitDepth));
-  Serial.println("Width:  " + String(width));
-  Serial.println("Height: " + String(height));
+  DEBUG_MINI_GRAFX("Version: %d\nBitDept: %d\nWidth: %d\nHeight:%d\n", version, bmpBitDepth, width, height);
 
   int16_t widthRoundedUp = (width + 7) & ~7;
 
@@ -1114,4 +1133,176 @@ void MiniGrafx::colorSwap(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, ui
       }
     }
   }
+}
+
+bool MiniGrafx::commitBmpFromFile(String filename, uint16_t xPos, uint16_t yPos) {
+  DEBUG_MINI_GRAFX("In commitBmpFromFile\n");
+  uint32_t t = millis();
+  File     bmpFile;
+  int      bmpWidth, bmpHeight;   // W+H in pixels
+  uint8_t  bmpDepth;              // Bit depth (currently must be 24)
+  uint32_t bmpImageoffset;        // Start of image data in file
+  uint32_t rowSize;               // Not always = bmpWidth; may have padding
+  //uint8_t  sdbuffer[3*20]; // pixel buffer (R+G+B per pixel)
+  //uint8_t  buffidx = sizeof(sdbuffer); // Current position in sdbuffer
+  boolean  goodBmp = false;       // Set to true on valid header parse
+  boolean  flip    = true;        // BMP is stored bottom-to-top
+  int      w, h, row, col;
+  uint8_t  r, g, b;
+  uint32_t pos = 0, startTime = millis();
+  uint16_t bitsPerPixelTwice = 16 * 2;
+  uint16_t paletteRGB[bitsPerPixelTwice][3];
+  for (int i = 0; i < bitsPerPixelTwice; i++) {
+    paletteRGB[i][0] = 255 * (palette[i] & 0xF800 >> 11) / 31;
+    paletteRGB[i][1] = 255 * (palette[i] & 0x7E0 >> 5) / 63;
+    paletteRGB[i][2] = 255 * (palette[i] & 0x1F) / 31;
+  }
+
+  if((xPos >= width) || (yPos >= height)) return false;
+
+  /*Serial.println();
+  Serial.print(F("Loading image '"));
+  Serial.print(filename);
+  Serial.println('\'');*/
+
+  bmpFile = SPIFFS.open(filename, "r");
+  // Open requested file on SD card
+  if (!bmpFile) {
+    DEBUG_MINI_GRAFX("File not found\n");
+    return false;
+  }
+
+  // Parse BMP header
+  if(read16(bmpFile) == 0x4D42) { // BMP signature
+    //Serial.print(F("File size: "));
+    uint32_t filesize = read32(bmpFile);
+    //Serial.println(filesize);
+    (void)read32(bmpFile); // Read & ignore creator bytes
+    bmpImageoffset = read32(bmpFile); // Start of image data
+    //Serial.print(F("Image Offset: ")); Serial.println(bmpImageoffset, DEC);
+    // Read DIB header
+    //Serial.print(F("Header size: "));
+    uint32_t headerSize = read32(bmpFile);
+    bmpWidth  = read32(bmpFile);
+    bmpHeight = read32(bmpFile);
+    if(read16(bmpFile) == 1) { // # planes -- must be '1'
+      bmpDepth = read16(bmpFile); // bits per pixel
+      DEBUG_MINI_GRAFX("Bit Depth: %d\n", bmpDepth);
+      if((read32(bmpFile) == 0)) { // 0 = uncompressed
+        goodBmp = true; // Supported BMP format -- proceed!
+        DEBUG_MINI_GRAFX("Image size: %dx%d\n", bmpWidth, bmpHeight);
+        // BMP rows are padded (if needed) to 4-byte boundary
+        rowSize = (bmpWidth * 3 + 3) & ~3;
+
+        // If bmpHeight is negative, image is in top-down order.
+        // This is not canon but has been observed in the wild.
+        if(bmpHeight < 0) {
+          bmpHeight = -bmpHeight;
+          flip      = false;
+        }
+
+        // Crop area to be loaded
+        w = bmpWidth;
+        h = bmpHeight;
+        if((xPos+w-1) >= width)  w = width  - xPos;
+        if((yPos+h-1) >= height) h = height - yPos;
+        uint16_t readSize = (w * 3 + 3) & ~3;
+        if ((bmpDepth == 24)) {
+          uint8_t sdbuffer[readSize]; // pixel buffer (R+G+B per pixel)
+          uint8_t  buffidx = sizeof(sdbuffer); // Current position in sdbuffer
+          uint16_t rowBuffer[w];
+          DEBUG_MINI_GRAFX("Ready to read Bmp. Free heap: %d\n", ESP.getFreeHeap());
+          for (row=0; row<h; row++) { // For each scanline...
+
+            // Seek to start of scan line.  It might seem labor-
+            // intensive to be doing this on every line, but this
+            // method covers a lot of gritty details like cropping
+            // and scanline padding.  Also, the seek only takes
+            // place if the file position actually needs to change
+            // (avoids a lot of cluster math in SD library).
+            if(flip) // Bitmap is stored bottom-to-top order (normal BMP)
+              pos = bmpImageoffset + (bmpHeight - 1 - row) * rowSize;
+            else     // Bitmap is stored top-to-bottom
+              pos = bmpImageoffset + row * rowSize;
+            if(bmpFile.position() != pos) { // Need seek?
+              bmpFile.seek(pos, SeekSet);
+              buffidx = sizeof(sdbuffer); // Force buffer reload
+            }
+
+            for (col=0; col<w; col++) { // For each pixel...
+              // Time to read more pixel data?
+              if (buffidx >= sizeof(sdbuffer)) { // Indeed
+                bmpFile.read(sdbuffer, sizeof(sdbuffer));
+                buffidx = 0; // Set index to beginning
+              }
+
+              // Convert pixel from BMP to TFT format, push to display
+              b = sdbuffer[buffidx++];
+              g = sdbuffer[buffidx++];
+              r = sdbuffer[buffidx++];
+              if (bitsPerPixel == 16) {
+                uint16_t color = ((g & 0xF8) << 8) | ((b & 0xFC) << 3) | (r >> 3);
+                //setColor(color);
+                rowBuffer[col] = color;
+              } else {
+                uint32_t minDistance = 99999999L;
+                for (int i = 0; i < (1 << bitsPerPixel); i++) {
+                  int16_t rd = (r-paletteRGB[i][0]);
+                  int16_t gd = (g-paletteRGB[i][1]);
+                  int16_t bd = (b-paletteRGB[i][2]);
+                  uint32_t distance = rd * rd + gd * gd + bd * bd;
+                  if (distance < minDistance) {
+                    //setColor(i);
+                    rowBuffer[col] = i;
+                    minDistance = distance;
+                  }
+                }
+              }
+              //setPixel(col + xPos, row + yPos);
+              //_tft->pushColor(_tft->color565(r,g,b));
+              //yield();
+            } // end pixel
+            this->driver->writeBuffer((uint8_t*)&rowBuffer, 16, nullptr, xPos, yPos+row, w, 1);
+          } // end scanline
+        } else if (bmpDepth == 1) {
+
+        }
+
+      } // end goodBmp
+    }
+  }
+
+  bmpFile.close();
+  if(!goodBmp) DEBUG_MINI_GRAFX("BMP format not recognized.\n");
+  DEBUG_MINI_GRAFX("Bmp processing time: %lu\n", (millis() - t));
+  return goodBmp;
+}
+
+bool MiniGrafx::commitBmpFromPgm(const char* xbm, uint16_t xPos, uint16_t yPos) {
+  return true;
+}
+
+// Replace onCommit callback function.
+// Return: previous one ptr.
+cbMiniGrafx MiniGrafx::onCommit(cbMiniGrafx cb) { 
+  cbMiniGrafx oldCb = cbCommit;
+  if (cb) {
+    cbCommit = cb;
+  } else {
+    cb = MiniGrafxDefaultCommit;
+  }
+  return oldCb;
+}
+
+void MiniGrafx::freeBuffer() {
+  free(buffer);
+  buffer = nullptr;
+}
+
+bool MiniGrafx::isBuffer() {
+  return buffer;
+}
+
+void MiniGrafxDefaultCommit(MiniGrafx* gfx, uint16_t x, uint16_t y) {
+  gfx->realCommit(x, y);
 }

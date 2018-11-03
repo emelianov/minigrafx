@@ -41,8 +41,10 @@ This code is based on a driver from http://waveshare.com
 #define _MINI_GRAFXH_
 
 #ifndef DEBUG_MINI_GRAFX
-#define DEBUG_MINI_GRAFX(...)
+//#define DEBUG_MINI_GRAFX(...)
+#define DEBUG_MINI_GRAFX(format, ...) Serial.printf_P(PSTR(format), ##__VA_ARGS__);
 #endif
+#define MINI_GRAFX_FAILSAFE if(!buffer) return;
 
 #ifndef _swap_int16_t
 #define _swap_int16_t(a, b) { int16_t t = a; a = b; b = t; }
@@ -83,8 +85,12 @@ enum BUFFER_COLOR_DEPTH {
 #undef min
 #define min(a,b) ((a)<(b)?(a):(b))
 
-class MiniGrafx {
+class MiniGrafx;
+typedef void (*cbMiniGrafx)(MiniGrafx* gfx, uint16_t x, uint16_t y); // Commit callback function Type
+void MiniGrafxDefaultCommit(MiniGrafx* gfx, uint16_t x, uint16_t y);
 
+class MiniGrafx {
+ friend void MiniGrafxDefaultCommit(MiniGrafx* gfx, uint16_t x, uint16_t y);
  public:
   MiniGrafx(DisplayDriver *driver, uint8_t bitsPerPixel, uint16_t *palette);
   MiniGrafx(DisplayDriver *driver, uint8_t bitsPerPixel, uint16_t *palette, uint16_t width, uint16_t height);
@@ -118,13 +124,11 @@ class MiniGrafx {
   void drawTriangle(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t x3, uint16_t y3);
   uint16_t getStringWidth(const char* text, uint16_t length);
   void drawXbm(int16_t x, int16_t y, int16_t width, int16_t height, const char *xbm);
-  void drawBmpFromFile(String filename, uint8_t x, uint16_t y);
+  void drawBmpFromFile(String filename, uint8_t x, uint16_t y, directWrite = false);
   void drawBmpFromPgm(const char *xbm, uint8_t x, uint16_t y);
   void drawPalettedBitmapFromPgm(uint16_t x, uint16_t y, const char *palBmp);
   void drawPalettedBitmapFromFile(uint16_t x, uint16_t y, String fileName);
 
-  uint16_t read16(File &f);
-  uint32_t read32(File &f);
   void setFont(const char *fontData);
   void setFontFile(String fontFile);
   void setTextAlignment(TEXT_ALIGNMENT textAlignment);
@@ -137,9 +141,20 @@ class MiniGrafx {
   static char* utf8ascii(String s);
   static byte utf8ascii(byte ascii);
   void colorSwap(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t color1, uint16_t color2);
+  
+  bool canvas(uint16_t height, uint16_t width, uint8_t* = nullptr){};
+  bool noCanvas(bool freeMem = true){};
+  bool pinCanvas(uint16_t xPos, uint16_t yPos){};
+  uint8_t* getCanvas(){};
+  bool commitCanvas(uint8_t* canvas, uint16_t xPos, uint16_t yPos){};
+  bool commitBmpFromFile(String filename, uint16_t xPos, uint16_t yPos);
+  bool commitBmpFromPgm(const char* xbm, uint16_t xPos, uint16_t yPos);
+  cbMiniGrafx onCommit(cbMiniGrafx=nullptr);
+  void initializeBuffer(uint8_t* preallocated=nullptr);
+  void freeBuffer();
+  bool isBuffer();
 
  private:
-  void initializeBuffer();
   DisplayDriver *driver;
   File fontFile;
   uint16_t width, height;
@@ -150,15 +165,18 @@ class MiniGrafx {
   uint8_t bitsPerPixel = 4;
   uint8_t bitShift = 1;
   uint16_t bufferSize = 0;
-  uint16_t* palette = 0;
-  uint8_t *buffer = 0;
+  uint16_t* palette = nullptr;
+  uint8_t *buffer = nullptr;
   uint16_t bitMask;
   uint8_t pixelsPerByte;
   boolean isPgmFont = true;
   const char *fontData = ArialMT_Plain_16;
+  cbMiniGrafx cbCommit = MiniGrafxDefaultCommit;
   TEXT_ALIGNMENT textAlignment;
   uint8_t readFontData(const char * start, uint32_t offset);
-
+  uint16_t read16(File &f);
+  uint32_t read32(File &f);
+  void realCommit(uint16_t xPos, uint16_t yPos);
 };
 
 #endif
