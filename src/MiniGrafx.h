@@ -50,6 +50,10 @@ This code is based on a driver from http://waveshare.com
 #define _swap_int16_t(a, b) { int16_t t = a; a = b; b = t; }
 #endif
 
+#ifndef __bswap_16
+ #define __bswap_16(num) ((uint16_t)num>>8) | ((uint16_t)num<<8)
+#endif
+
 // Header Values
 #define JUMPTABLE_BYTES 4
 
@@ -124,7 +128,7 @@ class MiniGrafx {
   void drawTriangle(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t x3, uint16_t y3);
   uint16_t getStringWidth(const char* text, uint16_t length);
   void drawXbm(int16_t x, int16_t y, int16_t width, int16_t height, const char *xbm);
-  void drawBmpFromFile(String filename, uint8_t x, uint16_t y, directWrite = false);
+  void drawBmpFromFile(String filename, uint8_t x, uint16_t y, bool directWrite = false);
   void drawBmpFromPgm(const char *xbm, uint8_t x, uint16_t y);
   void drawPalettedBitmapFromPgm(uint16_t x, uint16_t y, const char *palBmp);
   void drawPalettedBitmapFromFile(uint16_t x, uint16_t y, String fileName);

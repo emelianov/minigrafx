@@ -700,6 +700,7 @@ void MiniGrafx::drawBmpFromFile(String filename, uint8_t xMove, uint16_t yMove, 
             }
             uint16_t rowBuffer[w];
             for (col=0; col<w; col++) { // For each pixel...
+              uint16_t color;
               // Time to read more pixel data?
               //if (buffidx >= sizeof(sdbuffer)) { // Indeed
               if (buffidx >= MG_BUF_SIZE) { // Indeed
@@ -713,7 +714,7 @@ void MiniGrafx::drawBmpFromFile(String filename, uint8_t xMove, uint16_t yMove, 
               g = sdbuffer[buffidx++];
               r = sdbuffer[buffidx++];
               if (true || bitsPerPixel == 16) {
-                uint16_t color = ((g & 0xF8) << 8) | ((b & 0xFC) << 3) | (r >> 3);
+                color = ((g & 0xF8) << 8) | ((b & 0xFC) << 3) | (r >> 3);
                 //this->driver->writeBuffer((uint8_t*)&color, 16, nullptr, xMove+col, yMove+row, 2, 2);
               } else {
                 uint32_t minDistance = 99999999L;
@@ -727,12 +728,16 @@ void MiniGrafx::drawBmpFromFile(String filename, uint8_t xMove, uint16_t yMove, 
                     minDistance = distance;
                   }
                 }
-                if (!directWrite) setPixel(col + xMove, row + yMove);
               //_tft->pushColor(_tft->color565(r,g,b));
                 //yield();
               }
+              if (directWrite)
+                rowBuffer[col] = __bswap_16(color);
+                //rowBuffer[col] = color;
+              else
+                setPixel(col + xMove, row + yMove);
             } // end pixel
-            if (directWirte) this->driver->writeBuffer((uint8_t*)&rowBuffer, 16, nullptr, xMove, yMove+row, w, 2);
+            if (directWrite) this->driver->writeBuffer((uint8_t*)&rowBuffer, 16, nullptr, xMove, yMove+row, w, 1);
           } // end scanline
         } else if (bmpDepth == 1) {
 
