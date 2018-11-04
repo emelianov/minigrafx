@@ -581,7 +581,12 @@ void MiniGrafx::commit(uint16_t xPos, uint16_t yPos) {
 }
 
 void MiniGrafx::realCommit(uint16_t xPos, uint16_t yPos) {
-  this->driver->writeBuffer(buffer, bitsPerPixel, palette, xPos, yPos, this->width - xPos, this->height);
+  uint16_t h = height;
+  if (xPos + width > initialWidth) return; // Widht must must not exceed phisical screen
+  if (yPos + height > initialHeight) {  // If buffer outs bottom of screen
+    h = initialHeight - yPos;           // Trunkate
+  }
+  this->driver->writeBuffer(buffer, bitsPerPixel, palette, xPos, yPos, width, h);
 }
 
 void MiniGrafx::setFastRefresh(boolean isFastRefreshEnabled) {
@@ -627,6 +632,7 @@ void MiniGrafx::drawBmpFromFile(String filename, int16_t xMove, int16_t yMove, b
   uint32_t headerSize;
   uint32_t filesize;
   bool fast = false;
+  uint16_t bufSize;
   for (int i = 0; i < 1 << bitsPerPixel; i++) {
     paletteRGB[i][0] = 255 * (palette[i] & 0xF800 >> 11) / 31;
     paletteRGB[i][1] = 255 * (palette[i] & 0x7E0 >> 5) / 63;
@@ -696,18 +702,18 @@ void MiniGrafx::drawBmpFromFile(String filename, int16_t xMove, int16_t yMove, b
     }
   }
   if (fast) {
-    rowBuffer = (uint16_t*)malloc(w * 2 * h); // Allocate display row buffer
+    rowBuffer = (uint16_t*)malloc(w * 2 * h); // Allocate whole image buffer
     if (flip)
       rowOffset = w * (h - 1);
   } else {
-    rowBuffer = (uint16_t*)malloc(w * 2); // Allocate display row buffer
+    rowBuffer = (uint16_t*)malloc(w * 2); // Allocate row buffer
   }
   if (!rowBuffer) goto cleanup;
   if ((bmpDepth == 24)) {
-    uint16_t bufSize = (w * 3 + 3) & ~3;
+    rowSize = (bmpWidth * 3 + 3) & ~3;
+    bufSize = (w * 3 + 3) & ~3;
     sdbuffer = (uint8_t*)malloc(bufSize);
     if (!sdbuffer) goto cleanup;
-    rowSize = (bmpWidth * 3 + 3) & ~3;
     pos = bmpImageoffset; // Set initial image position in file
     if(flip) pos += s * rowSize; // Skip first-stored bottom lines in case of reverce order 
     for (row=0; row<h; row++) { // For each scanline...
@@ -769,8 +775,8 @@ void MiniGrafx::drawBmpFromFile(String filename, int16_t xMove, int16_t yMove, b
   free(sdbuffer);
   free(rowBuffer);
   bmpFile.close();
-  //DEBUG_MINI_GRAFX("Bmp processing time: %lu\n", (millis() - startTime));
-  //if(!goodBmp) DEBUG_MINI_GRAFX("BMP format not recognized.\n");
+  DEBUG_MINI_GRAFX("Bmp processing time: %lu\n", (millis() - startTime));
+  if(!goodBmp) DEBUG_MINI_GRAFX("BMP format not recognized.\n");
 }
 
 void MiniGrafx::drawBmpFromPgm(const char *bmp, uint8_t x, uint16_t y) {
