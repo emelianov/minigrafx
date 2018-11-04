@@ -41,8 +41,8 @@ This code is based on a driver from http://waveshare.com
 #define _MINI_GRAFXH_
 
 #ifndef DEBUG_MINI_GRAFX
-//#define DEBUG_MINI_GRAFX(...)
-#define DEBUG_MINI_GRAFX(format, ...) Serial.printf_P(PSTR(format), ##__VA_ARGS__);
+#define DEBUG_MINI_GRAFX(...)
+//#define DEBUG_MINI_GRAFX(format, ...) Serial.printf_P(PSTR(format), ##__VA_ARGS__);
 #endif
 #define MINI_GRAFX_FAILSAFE if(!buffer) return;
 
@@ -96,8 +96,8 @@ void MiniGrafxDefaultCommit(MiniGrafx* gfx, uint16_t x, uint16_t y);
 class MiniGrafx {
  friend void MiniGrafxDefaultCommit(MiniGrafx* gfx, uint16_t x, uint16_t y);
  public:
-  MiniGrafx(DisplayDriver *driver, uint8_t bitsPerPixel, uint16_t *palette);
-  MiniGrafx(DisplayDriver *driver, uint8_t bitsPerPixel, uint16_t *palette, uint16_t width, uint16_t height);
+  MiniGrafx(DisplayDriver *driver, uint8_t bitsPerPixel, uint16_t *palette, bool allocateBuffer = true);
+  MiniGrafx(DisplayDriver *driver, uint8_t bitsPerPixel, uint16_t *palette, uint16_t width, uint16_t height, bool allocateBuffer = true);
   void init();
   void changeBitDepth(uint8_t bitsPerPixel, uint16_t *palette);
   uint16_t getHeight();
@@ -151,18 +151,16 @@ class MiniGrafx {
   bool pinCanvas(uint16_t xPos, uint16_t yPos){};
   uint8_t* getCanvas(){};
   bool commitCanvas(uint8_t* canvas, uint16_t xPos, uint16_t yPos){};
-  bool commitBmpFromFile(String filename, uint16_t xPos, uint16_t yPos);
-  bool commitBmpFromPgm(const char* xbm, uint16_t xPos, uint16_t yPos);
   cbMiniGrafx onCommit(cbMiniGrafx=nullptr);
-  void initializeBuffer(uint8_t* preallocated=nullptr);
+  void initializeBuffer(uint16_t w = 0, uint16_t h = 0);
   void freeBuffer();
   bool isBuffer();
-
+  uint16_t initialWidth, initialHeight;
  private:
   DisplayDriver *driver;
   File fontFile;
   uint16_t width, height;
-  uint16_t initialWidth, initialHeight;
+  //uint16_t initialWidth, initialHeight;
   uint16_t color;
   uint8_t rotation;
   int16_t transparentColor = -1;
