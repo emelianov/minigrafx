@@ -630,11 +630,11 @@ void MiniGrafx::drawBmpFromFile(String filename, int16_t xMove, int16_t yMove, b
   // Open requested file on SD card
   if (!bmpFile) {
     DEBUG_MINI_GRAFX("File not found\n");
-    return;
+    goto cleanup;
   }
 
   // Parse BMP header
-  if(read16(bmpFile) != 0x4D42) return; // Check BMP signature
+  if(read16(bmpFile) != 0x4D42) goto cleanup; // Check BMP signature
 
   uint32_t filesize = read32(bmpFile);
   //DEBUG_MINI_GRAFX("File size: %d\n", filesize);
@@ -644,7 +644,7 @@ void MiniGrafx::drawBmpFromFile(String filename, int16_t xMove, int16_t yMove, b
   //DEBUG_MINI_GRAFX("Image Offset: %d\nHeader size: %d\n", bmpImageoffset, headerSize);
   bmpWidth  = read32(bmpFile);
   bmpHeight = read32(bmpFile);
-  if(read16(bmpFile) != 1) return; // Check # planes -- must be '1'
+  if(read16(bmpFile) != 1) goto cleanup; // Check # planes -- must be '1'
   bmpDepth = read16(bmpFile); // bits per pixel
   DEBUG_MINI_GRAFX("Bit Depth: %d\n", bmpDepth);
   if((read32(bmpFile) != 0)) goto cleanup; // Check 0 = uncompressed
@@ -668,10 +668,11 @@ void MiniGrafx::drawBmpFromFile(String filename, int16_t xMove, int16_t yMove, b
   if((xMove+w-1) >= width)  w = width  - xMove;
   if((yMove+h-1) >= height) h = height - yMove;
   rowBuffer = (uint16_t*)malloc(w * 2); // Allocate display row buffer
-
+  if (!rowBuffer) goto cleanup;
   if ((bmpDepth == 24)) {
     uint16_t bufSize = (w * 3 + 3) & ~3;
     sdbuffer = (uint8_t*)malloc(bufSize);
+    if (!sdbuffer) goto cleanup;
     rowSize = (bmpWidth * 3 + 3) & ~3;
     pos = bmpImageoffset;
     for (row=0; row<h; row++) { // For each scanline...
