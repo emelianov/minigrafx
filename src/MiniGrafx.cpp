@@ -618,6 +618,8 @@ void MiniGrafx::drawBmpFromFile(String filename, int16_t xMove, int16_t yMove, b
   uint8_t  r, g, b;
   uint32_t pos = 0, startTime = millis();
   uint16_t paletteRGB[1 << bitsPerPixel][3];
+  uint32_t headerSize;
+  uint32_t filesize;
   for (int i = 0; i < 1 << bitsPerPixel; i++) {
     paletteRGB[i][0] = 255 * (palette[i] & 0xF800 >> 11) / 31;
     paletteRGB[i][1] = 255 * (palette[i] & 0x7E0 >> 5) / 63;
@@ -636,11 +638,11 @@ void MiniGrafx::drawBmpFromFile(String filename, int16_t xMove, int16_t yMove, b
   // Parse BMP header
   if(read16(bmpFile) != 0x4D42) goto cleanup; // Check BMP signature
 
-  uint32_t filesize = read32(bmpFile);
+  filesize = read32(bmpFile);
   //DEBUG_MINI_GRAFX("File size: %d\n", filesize);
   (void)read32(bmpFile); // Read & ignore creator bytes
   bmpImageoffset = read32(bmpFile); // Start of image data
-  uint32_t headerSize = read32(bmpFile);
+  headerSize = read32(bmpFile);
   //DEBUG_MINI_GRAFX("Image Offset: %d\nHeader size: %d\n", bmpImageoffset, headerSize);
   bmpWidth  = read32(bmpFile);
   bmpHeight = read32(bmpFile);
