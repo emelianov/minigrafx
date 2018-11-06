@@ -665,7 +665,7 @@ void MiniGrafx::drawBmpFromFile(String filename, int16_t xMove, int16_t yMove, b
   if(read16(bmpFile) != 1) goto cleanup; // Check # planes -- must be '1'
   bmpDepth = read16(bmpFile); // bits per pixel
   DEBUG_MINI_GRAFX("Bit Depth: %d\n", bmpDepth);
-  if((read32(bmpFile) != 0)) goto cleanup; // Check 0 = uncompressed
+  //if((read32(bmpFile) != 0)) goto cleanup; // Check 0 = uncompressed
 
   goodBmp = true; // Supported BMP format -- proceed!
   //DEBUG_MINI_GRAFX("Image size: %dx%d\n", bmpWidth, bmpHeight);
@@ -712,23 +712,28 @@ void MiniGrafx::drawBmpFromFile(String filename, int16_t xMove, int16_t yMove, b
   if ((bmpDepth == 24)) {
     rowSize = (bmpWidth * 3 + 3) & ~3;
     bufSize = (w * 3 + 3) & ~3;
-    sdbuffer = (uint8_t*)malloc(bufSize);
-    if (!sdbuffer) goto cleanup;
-    pos = bmpImageoffset; // Set initial image position in file
-    if(flip) pos += s * rowSize; // Skip first-stored bottom lines in case of reverce order 
-    for (row=0; row<h; row++) { // For each scanline...
-      // Seek to start of scan line.  It might seem labor-
-      // intensive to be doing this on every line, but this
-      // method covers a lot of gritty details like cropping
-      // and scanline padding.  Also, the seek only takes
-      // place if the file position actually needs to change
-      // (avoids a lot of cluster math in SD library).
-      if(bmpFile.position() != pos) // Need seek?
-        bmpFile.seek(pos, SeekSet);
-      bmpFile.read(sdbuffer, bufSize); // Read full line (Cropped if needed).
-      buffidx = 0; // Set index to beginning
-      for (col=0; col<w; col++) { // For each pixel...
-        uint16_t color;
+  } else if (bmpDepth == 16) {
+    rowSize = (bmpWidth * 2 + 2) & ~3;
+    bufSize = (w * 2 + 2) & ~3;
+  }
+  sdbuffer = (uint8_t*)malloc(bufSize);
+  if (!sdbuffer) goto cleanup;
+  pos = bmpImageoffset; // Set initial image position in file
+  if(flip) pos += s * rowSize; // Skip first-stored bottom lines in case of reverce order 
+  for (row=0; row<h; row++) { // For each scanline...
+    // Seek to start of scan line.  It might seem labor-
+    // intensive to be doing this on every line, but this
+    // method covers a lot of gritty details like cropping
+    // and scanline padding.  Also, the seek only takes
+    // place if the file position actually needs to change
+    // (avoids a lot of cluster math in SD library).
+    if(bmpFile.position() != pos) // Need seek?
+      bmpFile.seek(pos, SeekSet);
+    bmpFile.read(sdbuffer, bufSize); // Read full line (Cropped if needed).
+    buffidx = 0; // Set index to beginning
+    for (col=0; col<w; col++) { // For each pixel...
+      uint16_t color;
+      if (bmpDepth == 24) {
         // Convert pixel from BMP to TFT format, push to display
         b = sdbuffer[buffidx++];
         g = sdbuffer[buffidx++];
@@ -749,28 +754,32 @@ void MiniGrafx::drawBmpFromFile(String filename, int16_t xMove, int16_t yMove, b
             }
           }
         }
-        if (directWrite) {
-          rowBuffer[col + rowOffset] = __bswap_16(color);
-        } else {
-          setPixel(col + xMove, row + yMove);
-        }
-      } // end pixel
-      if (directWrite) {
-        if (!fast) {
-          this->driver->writeBuffer((uint8_t*)rowBuffer, 16, nullptr, xMove, yMove+(flip?h-row:row), w, 1);
-        } else {
-          if (flip)
-            rowOffset -= w;
-          else
-            rowOffset += w;
+      } else if (bmpDepth == 16) {
+        if (directWrite || bitsPerPixel == 16) {
+          color = sdbuffer[buffidx++] | sdbuffer[buffidx++] << 8;
+          setColor(color);
         }
       }
-      pos += rowSize;
-    } // end scanline
-    if (directWrite)
-      if (fast) this->driver->writeBuffer((uint8_t*)rowBuffer, 16, nullptr, xMove, yMove, w, h);
-  } else if (bmpDepth == 1) {
-  }
+      if (directWrite) {
+        rowBuffer[col + rowOffset] = __bswap_16(color);
+      } else {
+        setPixel(col + xMove, row + yMove);
+      }
+    } // end pixel
+    if (directWrite) {
+      if (!fast) {
+        this->driver->writeBuffer((uint8_t*)rowBuffer, 16, nullptr, xMove, yMove+(flip?h-row:row), w, 1);
+      } else {
+        if (flip)
+          rowOffset -= w;
+        else
+          rowOffset += w;
+      }
+    }
+    pos += rowSize;
+  } // end scanline
+  if (directWrite)
+    if (fast) this->driver->writeBuffer((uint8_t*)rowBuffer, 16, nullptr, xMove, yMove, w, h);
   cleanup:
   free(sdbuffer);
   free(rowBuffer);
