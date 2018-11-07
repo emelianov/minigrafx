@@ -84,3 +84,73 @@ the given index.
 void setPixel(uint16_t x, uint16_t y);
 uint16_t getPixel(uint16_t x, uint16_t y);
 ```
+
+# Extended functionality over original library
+
+## Constructor
+
+Constructors is extended with allocateBuffer parameter. If true (default) constructor allocates memory buffer according screen size an bit depth.
+If false allocation is not performed and needs to be done manually.
+
+```C++
+MiniGrafx(DisplayDriver *driver, uint8_t bitsPerPixel, uint16_t *palette, bool allocateBuffer = true);
+MiniGrafx(DisplayDriver *driver, uint8_t bitsPerPixel, uint16_t *palette, uint16_t width, uint16_t height, bool allocateBuffer = true);
+```
+
+## drawBmpFromFile
+
+Draw .bmp file from file system. (x, y) left-top conner. If directWrite is true drwaing bypassed memory buffer and draw direct
+to display. 16-bit (only for directWrite by now) and 24-bit uncompressed Bmp is supported. By now x an y must be positive.
+
+```C++
+void drawBmpFromFile(String filename, int16_t x, int16_t y, bool directWrite = false);
+```
+
+# Commit operations
+
+## commit
+
+(xPos, yPos) left-top corner of buffer at display. Buffer width must fit display (yPos + buffer width <= dispaly width). Buffer height can exceed display. By now x an y must be positive.
+
+```C++
+void commit(int16_t xPos = 0, int16_t yPos = 0);
+```
+
+## onCommit
+
+Assigns function called on each commit. Returns currently assigned function. So you can build chain of functions called on commit.
+If no default callback function will be called no display update process will be performed.
+If cbMiniGrafx parameter is nullptr or not specified default function will be restored.
+
+```C++
+cbMiniGrafx onCommit(cbMiniGrafx=nullptr);
+```
+
+```C++
+typedef void (*cbMiniGrafx)(MiniGrafx* gfx, uint16_t x, uint16_t y);
+```
+
+# Buffer operations
+
+# initializeBuffer
+
+1. With no parameters allocates buffer to fit whole screen. If buffer already allocated nothing will be done.
+2. If heigh and width (h, w) provided allocates buffer to fit requested size and configures library to be limited to draw in this constarains. If buffer already allocated nothing will be done.
+3. If preallocated buffer is specified too assigns the buffer for drwaing. If buffer already allocated it will no be freed automaticly.
+
+```C++
+void initializeBuffer(uint16_t w = 0, uint16_t h = 0, uint8_t* preallocated = nullptr);
+```
+
+## getBuffer
+
+Returns pointer to screen buffer currently used.
+
+```C++
+uint8_t getBuffer();
+```
+## freeBuffer
+
+```C++
+void freeBuffer();
+```

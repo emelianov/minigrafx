@@ -137,8 +137,7 @@ class MiniGrafx {
   void setFontFile(String fontFile);
   void setTextAlignment(TEXT_ALIGNMENT textAlignment);
   void inline drawInternal(int16_t xMove, int16_t yMove, int16_t width, int16_t height, const char *data, uint16_t offset, uint16_t bytesInData);
-  void commit();
-  void commit(uint16_t xPos, uint16_t yPos);
+  void commit(uint16_t xPos = 0, uint16_t yPos = 0);
   void clear();
   void setFastRefresh(boolean isFastRefreshEnabled);
   void fillBuffer(uint8_t pal);
@@ -146,21 +145,16 @@ class MiniGrafx {
   static byte utf8ascii(byte ascii);
   void colorSwap(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t color1, uint16_t color2);
   
-  bool canvas(uint16_t height, uint16_t width, uint8_t* = nullptr){};
-  bool noCanvas(bool freeMem = true){};
-  bool pinCanvas(uint16_t xPos, uint16_t yPos){};
-  uint8_t* getCanvas(){};
-  bool commitCanvas(uint8_t* canvas, uint16_t xPos, uint16_t yPos){};
   cbMiniGrafx onCommit(cbMiniGrafx=nullptr);
-  void initializeBuffer(uint16_t w = 0, uint16_t h = 0);
+  void initializeBuffer(uint16_t w = 0, uint16_t h = 0, uint8_t* preallocated = nullptr);
+  uint8_t* getBuffer();
   void freeBuffer();
-  bool isBuffer();
-  uint16_t initialWidth, initialHeight;
- private:
+  
+ protected:
   DisplayDriver *driver;
   File fontFile;
   uint16_t width, height;
-  //uint16_t initialWidth, initialHeight;
+  uint16_t initialWidth, initialHeight;
   uint16_t color;
   uint8_t rotation;
   int16_t transparentColor = -1;

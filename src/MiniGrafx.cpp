@@ -37,7 +37,6 @@ MiniGrafx::MiniGrafx(DisplayDriver *driver, uint8_t bitsPerPixel, uint16_t *pale
   this->palette = palette;
   this->bitsPerPixel = bitsPerPixel;
   if (allocateBuffer) initializeBuffer();
-
 }
 
 MiniGrafx::MiniGrafx(DisplayDriver *driver, uint8_t bitsPerPixel, uint16_t *palette, uint16_t width, uint16_t height, bool allocateBuffer) {
@@ -51,8 +50,8 @@ MiniGrafx::MiniGrafx(DisplayDriver *driver, uint8_t bitsPerPixel, uint16_t *pale
   if (allocateBuffer) initializeBuffer();
 }
 
-void MiniGrafx::initializeBuffer(uint16_t w, uint16_t h) {
-  if (buffer) return;
+void MiniGrafx::initializeBuffer(uint16_t w, uint16_t h, uint8_t* preallocated) {
+  if (buffer && !preallocated) return;
   if (w == 0 || h == 0) {
     this->width = this->initialWidth;
     this->height = this->initialHeight;
@@ -99,8 +98,12 @@ void MiniGrafx::initializeBuffer(uint16_t w, uint16_t h) {
 }
 
 void MiniGrafx::changeBitDepth(uint8_t bitsPerPixel, uint16_t *palette) {
-  free(this->buffer);
-  initializeBuffer();
+  this->palette = palette;
+  this->bitsPerPixel = bitsPerPixel;
+  if (buffer) {
+    free(buffer);
+    initializeBuffer();
+  }
 }
 
 uint16_t MiniGrafx::getHeight() {
@@ -111,7 +114,6 @@ uint16_t MiniGrafx::getWidth() {
 }
 
 void MiniGrafx::setRotation(uint8_t m) {
-  return;
   rotation = m % 4; // can't be higher than 3
   switch (rotation) {
    case 0:
@@ -569,10 +571,6 @@ void MiniGrafx::fillBuffer(uint8_t pal) {
 
 void MiniGrafx::clear() {
   this->fillBuffer(0);
-}
-
-void MiniGrafx::commit() {
-  commit(0, 0);
 }
 
 void MiniGrafx::commit(uint16_t xPos, uint16_t yPos) {
@@ -1192,7 +1190,7 @@ void MiniGrafx::freeBuffer() {
   buffer = nullptr;
 }
 
-bool MiniGrafx::isBuffer() {
+uint8_t* MiniGrafx::getBuffer() {
   return buffer;
 }
 
