@@ -611,6 +611,9 @@ void MiniGrafx::drawXbm(int16_t xMove, int16_t yMove, int16_t width, int16_t hei
 }
 
 void MiniGrafx::drawBmpFromFile(String filename, int16_t xMove, int16_t yMove, bool directWrite) {
+    drawBmpFromFile(filename.c_str(), xMove, yMove, directWrite);
+}
+void MiniGrafx::drawBmpFromFile(const char* filename, int16_t xMove, int16_t yMove, bool directWrite) {
   DEBUG_MINI_GRAFX("In drawBmpFromFile\n");
   File     bmpFile;
   int      bmpWidth, bmpHeight;   // W+H in pixels
