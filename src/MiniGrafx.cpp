@@ -648,7 +648,7 @@ void MiniGrafx::drawBmpFromFile(const char* filename, int16_t xMove, int16_t yMo
   bmpFile = SPIFFS.open(filename, "r");
   // Open requested file on SD card
   if (!bmpFile) {
-    DEBUG_MINI_GRAFX("File not found\n");
+    DEBUG_MINI_GRAFX("File %s not found\n", filename);
     goto cleanup;
   }
 

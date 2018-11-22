@@ -41,8 +41,8 @@ This code is based on a driver from http://waveshare.com
 #define _MINI_GRAFXH_
 
 #ifndef DEBUG_MINI_GRAFX
-//#define DEBUG_MINI_GRAFX(...)
-#define DEBUG_MINI_GRAFX(format, ...) Serial.printf_P(PSTR(format), ##__VA_ARGS__);
+#define DEBUG_MINI_GRAFX(...)
+//#define DEBUG_MINI_GRAFX(format, ...) Serial.printf_P(PSTR(format), ##__VA_ARGS__);
 #endif
 #define MINI_GRAFX_FAILSAFE if(!buffer) return;
 
