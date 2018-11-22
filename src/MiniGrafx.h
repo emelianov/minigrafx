@@ -69,6 +69,14 @@ This code is based on a driver from http://waveshare.com
 
 #define CUSTOM_BITMAP_DATA_START 6
 
+enum DRAW_FLAGS {
+  DRAW_TO_BUFFER = 1,
+  DRAW_DIRECT = 2,
+  DRAW_CACHE_IMAGE = 4,
+  DRAW_CACHE_CHECK = 8,
+  DRAW_CACHE_KEEP = 16
+}
+
 enum TEXT_ALIGNMENT {
   TEXT_ALIGN_LEFT = 0,
   TEXT_ALIGN_RIGHT = 1,
@@ -128,8 +136,8 @@ class MiniGrafx {
   void drawTriangle(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t x3, uint16_t y3);
   uint16_t getStringWidth(const char* text, uint16_t length);
   void drawXbm(int16_t x, int16_t y, int16_t width, int16_t height, const char *xbm);
-  void drawBmpFromFile(const char* filename, int16_t x, int16_t y, bool directWrite = false);
-  void drawBmpFromFile(String filename, int16_t x, int16_t y, bool directWrite = false);
+  void drawBmpFromFile(const char* filename, int16_t x, int16_t y, DRAW_FLAGS writeMode = DRAW_TO_BUFFER);
+  void drawBmpFromFile(String filename, int16_t x, int16_t y, DRAW_FLAGS writeMode = DRAW_TO_BUFFER);
   void drawBmpFromPgm(const char *xbm, uint8_t x, uint16_t y);
   void drawPalettedBitmapFromPgm(uint16_t x, uint16_t y, const char *palBmp);
   void drawPalettedBitmapFromFile(uint16_t x, uint16_t y, String fileName);
