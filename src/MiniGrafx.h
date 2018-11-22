@@ -68,14 +68,21 @@ This code is based on a driver from http://waveshare.com
 #define CHAR_NUM_POS 3
 
 #define CUSTOM_BITMAP_DATA_START 6
-
+/*
 enum DRAW_FLAGS {
   DRAW_TO_BUFFER = 1,
   DRAW_DIRECT = 2,
-  DRAW_CACHE_IMAGE = 4,
+  DRAW_TO_CACHE = 4,
   DRAW_CACHE_CHECK = 8,
   DRAW_CACHE_KEEP = 16
-}
+};
+*/
+#define DRAW_FLAGS uint16_t
+#define  DRAW_TO_BUFFER  1
+#define  DRAW_DIRECT 2
+#define  DRAW_TO_CACHE 4
+#define  DRAW_CACHE_CHECK 8
+#define  DRAW_CACHE_KEEP 16
 
 enum TEXT_ALIGNMENT {
   TEXT_ALIGN_LEFT = 0,
