@@ -610,10 +610,10 @@ void MiniGrafx::drawXbm(int16_t xMove, int16_t yMove, int16_t width, int16_t hei
   }
 }
 
-void MiniGrafx::drawBmpFromFile(String filename, int16_t xMove, int16_t yMove, DRAW_FLAGS writeMode) {
+void MiniGrafx::drawBmpFromFile(String filename, int16_t xMove, int16_t yMove, uint8_t writeMode) {
     drawBmpFromFile(filename.c_str(), xMove, yMove, writeMode);
 }
-void MiniGrafx::drawBmpFromFile(const char* filename, int16_t xMove, int16_t yMove, DRAW_FLAGS writeMode) {
+void MiniGrafx::drawBmpFromFile(const char* filename, int16_t xMove, int16_t yMove, uint8_t writeMode) {
   DEBUG_MINI_GRAFX("In drawBmpFromFile\n");
   File     bmpFile;
   int      bmpWidth, bmpHeight;   // W+H in pixels
@@ -666,6 +666,7 @@ void MiniGrafx::drawBmpFromFile(const char* filename, int16_t xMove, int16_t yMo
   if(read16(bmpFile) != 1) goto cleanup; // Check # planes -- must be '1'
   bmpDepth = read16(bmpFile); // bits per pixel
   DEBUG_MINI_GRAFX("Bit Depth: %d\n", bmpDepth);
+  // Check below is not working for 16-bit .bmp. Should check .bmp header structure.
   //if((read32(bmpFile) != 0)) goto cleanup; // Check 0 = uncompressed
 
   goodBmp = true; // Supported BMP format -- proceed!
@@ -743,7 +744,7 @@ void MiniGrafx::drawBmpFromFile(const char* filename, int16_t xMove, int16_t yMo
         r = sdbuffer[buffidx++];
         if ((writeMode & DRAW_DIRECT) != 0 || bitsPerPixel == 16) {
           color = ((r & 0x00F8) << 8) | ((g & 0x00FC) << 3) | ((b & 0x00F8) >> 3);
-          //setColor(color);
+          setColor(color);
         } else {
           uint32_t minDistance = 99999999L;
           for (int i = 0; i < (1 << bitsPerPixel); i++) {
@@ -760,13 +761,14 @@ void MiniGrafx::drawBmpFromFile(const char* filename, int16_t xMove, int16_t yMo
       } else if (bmpDepth == 16) {
         if ((writeMode & (DRAW_DIRECT | DRAW_TO_CACHE)) != 0 || bitsPerPixel == 16) {
           color = sdbuffer[buffidx++] | sdbuffer[buffidx++] << 8;
-          //setColor(color);
+          setColor(color);
         }
       }
       if ((writeMode & (DRAW_DIRECT | DRAW_TO_CACHE)) != 0) {
         rowBuffer[col + rowOffset] = __bswap_16(color);
       } else {
-        setPixel(col + xMove, row + yMove);
+        if ((writeMode & DRAW_BUFFER) =! 0)
+          setPixel(col + xMove, row + yMove);
       }
     } // end pixel
     if ((writeMode & DRAW_DIRECT) != 0) {
@@ -919,7 +921,6 @@ void MiniGrafx::drawBmpFromPgm(const char *bmp, uint8_t x, uint16_t y) {
 
             if (bitsPerPixel == 16) {
               uint16_t color = ((g & 0xF8) << 8) | ((b & 0xFC) << 3) | (r >> 3);
-              //uint16_t color = ((r & 0x00F8) << 8) | ((g & 0x00FC) << 3) | ((b & 0x00F8) >> 3);
               setColor(color);
             } else {
               uint16_t color = (b + g + r) / (3 * 16);
