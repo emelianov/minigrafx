@@ -611,8 +611,30 @@ void MiniGrafx::drawXbm(int16_t xMove, int16_t yMove, int16_t width, int16_t hei
 }
 
 void MiniGrafx::drawBmpFromFile(String filename, int16_t xMove, int16_t yMove, uint8_t writeMode) {
-    drawBmpFromFile(filename.c_str(), xMove, yMove, directWrite);
+    drawBmpFromFile(filename.c_str(), xMove, yMove, writeMode);
 }
+/*
+struct cacheEntry_t {
+  char* filename;
+  uint16_t h,w;
+  cacheEntry_t* next;
+  uint16_t pixels[];
+};
+struct bmpHeader {
+  uint32_t  signature;  // 0x4D42
+  uint32_t  fileSize;
+  uint16_t  reserved1,
+  uint16_t  reserved2,
+  uint32_t  bitmap offset,
+  uint32_t  headerSize, // 40
+  int32_t   w,
+  int32_t   h,
+  uint16_t  colorPlanesNumber,  // 1
+  uint16_t  bitsPerPixel,
+  uint32_t  compressionMethod // 0 is required
+  // rest are skipped
+};
+*/
 void MiniGrafx::drawBmpFromFile(const char* filename, int16_t xMove, int16_t yMove, uint8_t writeMode) {
   DEBUG_MINI_GRAFX("In drawBmpFromFile\n");
   File     bmpFile;
@@ -636,6 +658,9 @@ void MiniGrafx::drawBmpFromFile(const char* filename, int16_t xMove, int16_t yMo
   uint32_t filesize;
   bool fast = false;
   uint16_t bufSize;
+  if (writeMode & DRAW_CACHE_CHECK) {
+
+  }
   for (int i = 0; i < 1 << bitsPerPixel; i++) {
     paletteRGB[i][0] = 255 * (palette[i] & 0xF800 >> 11) / 31;
     paletteRGB[i][1] = 255 * (palette[i] & 0x7E0 >> 5) / 63;
@@ -759,7 +784,8 @@ void MiniGrafx::drawBmpFromFile(const char* filename, int16_t xMove, int16_t yMo
         if ((writeMode & DRAW_DIRECT) || bitsPerPixel == 16) {
           color = ((r & 0x00F8) << 8) | ((g & 0x00FC) << 3) | ((b & 0x00F8) >> 3);
           setColor(color);
-        } else {
+        }
+        if ((writeMode & DRAW_TO_BUFFER) && !(bitsPerPixel == 16)) {
           uint32_t minDistance = 99999999L;
           for (int i = 0; i < (1 << bitsPerPixel); i++) {
             int16_t rd = (r-paletteRGB[i][0]);
@@ -778,14 +804,15 @@ void MiniGrafx::drawBmpFromFile(const char* filename, int16_t xMove, int16_t yMo
           setColor(color);
         }
       }
-      if ((writeMode & (DRAW_DIRECT | DRAW_TO_CACHE)) {
+      if (writeMode & (DRAW_DIRECT | DRAW_TO_CACHE)) {
         rowBuffer[col + rowOffset] = __bswap_16(color);
-      } else if (writeMode & DRAW_TO_BUFFER) {
+      }
+      if (writeMode & DRAW_TO_BUFFER) {
         setPixel(col + xMove, row + yMove);
       }
     } // end pixel
     if (writeMode & DRAW_DIRECT) {
-      if (!(writeMode & DRAW_TO_CACHE)
+      if (!(writeMode & DRAW_TO_CACHE)) {
         this->driver->writeBuffer((uint8_t*)rowBuffer, 16, nullptr, xMove, yMove+(flip?h-row:row), w, 1);
       } else {
         if (flip)

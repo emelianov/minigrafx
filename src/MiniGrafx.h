@@ -41,7 +41,7 @@ This code is based on a driver from http://waveshare.com
 #define _MINI_GRAFXH_
 
 #ifndef DEBUG_MINI_GRAFX
-//#define DEBUG_MINI_GRAFX(...)
+//#define DEBUG_MINI_GRAFX(...) ;
 #define DEBUG_MINI_GRAFX(format, ...) Serial.printf_P(PSTR(format), ##__VA_ARGS__);
 #endif
 #define MINI_GRAFX_FAILSAFE if(!buffer) return;
@@ -71,7 +71,7 @@ This code is based on a driver from http://waveshare.com
 
 #define DRAW_TO_BUFFER 1
 #define DRAW_DIRECT 2
-#define DRAW_CACHE_IMAGE 4
+#define DRAW_TO_CACHE 4
 #define DRAW_CACHE_CHECK 8
 #define DRAW_CACHE_KEEP 16
 
