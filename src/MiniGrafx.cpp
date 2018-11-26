@@ -719,7 +719,7 @@ void MiniGrafx::drawBmpFromFile(const char* filename, int16_t xMove, int16_t yMo
   
   if (xMove < 0) {
     colStart = -xMove;
-    w += colStart;
+    w -= colStart;
     xMove = 0;
   }
   if (yMove < 0) {
