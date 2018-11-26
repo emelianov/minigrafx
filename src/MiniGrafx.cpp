@@ -610,10 +610,34 @@ void MiniGrafx::drawXbm(int16_t xMove, int16_t yMove, int16_t width, int16_t hei
   }
 }
 
-void MiniGrafx::drawBmpFromFile(String filename, int16_t xMove, int16_t yMove, DRAW_FLAGS writeMode) {
+void MiniGrafx::drawBmpFromFile(String filename, int16_t xMove, int16_t yMove, uint8_t writeMode) {
     drawBmpFromFile(filename.c_str(), xMove, yMove, writeMode);
 }
-void MiniGrafx::drawBmpFromFile(const char* filename, int16_t xMove, int16_t yMove, DRAW_FLAGS writeMode) {
+/*
+struct cacheEntry_t {
+  char* filename;
+  uint16_t h,w;
+  cacheEntry_t* next;
+  uint16_t pixels[];
+};
+*/
+/*
+struct bmpHeader {
+  uint32_t  signature;  // 0x4D42
+  uint32_t  fileSize;
+  uint16_t  reserved1,
+  uint16_t  reserved2,
+  uint32_t  bitmap offset,
+  uint32_t  headerSize, // 40
+  int32_t   w,
+  int32_t   h,
+  uint16_t  colorPlanesNumber,  // 1
+  uint16_t  bitsPerPixel,
+  uint32_t  compressionMethod // 0 is required
+  // rest are skipped
+};
+*/
+void MiniGrafx::drawBmpFromFile(const char* filename, int16_t xMove, int16_t yMove, uint8_t writeMode) {
   DEBUG_MINI_GRAFX("In drawBmpFromFile\n");
   File     bmpFile;
   int      bmpWidth, bmpHeight;   // W+H in pixels
@@ -621,11 +645,13 @@ void MiniGrafx::drawBmpFromFile(const char* filename, int16_t xMove, int16_t yMo
   uint32_t bmpImageoffset;        // Start of image data in file
   uint32_t rowSize;               // Not always = bmpWidth; may have padding
   uint8_t* sdbuffer = nullptr;    // pixel buffer (R+G+B per pixel)
-  uint16_t* rowBuffer = nullptr;   // display row buffer
-  uint16_t rowOffset = 0;          //rowBuffer offset
-  uint16_t  buffidx; // Current position in sdbuffer
+  uint16_t* rowBuffer = nullptr;  // display row or full image buffer
+  uint16_t rowOffset = 0;         // rowBuffer offset
+  uint16_t buffidx;               // Current position in sdbuffer
   boolean  goodBmp = false;       // Set to true on valid header parse
   boolean  flip    = true;        // BMP is stored bottom-to-top
+  uint16_t rowStart = 0;          // BMP start row. Non-zero for negative xMove.
+  uint16_t colStart = 0;          // BMP start column Non-zero for negative yMove.
   int      w, h, row, col, s;
   uint8_t  r, g, b;
   uint32_t pos = 0, startTime = millis();
@@ -634,12 +660,15 @@ void MiniGrafx::drawBmpFromFile(const char* filename, int16_t xMove, int16_t yMo
   uint32_t filesize;
   bool fast = false;
   uint16_t bufSize;
+  if (writeMode & DRAW_CACHE_CHECK) {
+
+  }
   for (int i = 0; i < 1 << bitsPerPixel; i++) {
     paletteRGB[i][0] = 255 * (palette[i] & 0xF800 >> 11) / 31;
     paletteRGB[i][1] = 255 * (palette[i] & 0x7E0 >> 5) / 63;
     paletteRGB[i][2] = 255 * (palette[i] & 0x1F) / 31;
   }
-  if ((writeMode & DRAW_DIRECT) != 0) {
+  if ((writeMode & DRAW_DIRECT)) {
     if((xMove >= initialWidth) || (yMove >= initialHeight)) goto cleanup;
   } else {
     if((xMove >= width) || (yMove >= height)) goto cleanup;
@@ -666,7 +695,7 @@ void MiniGrafx::drawBmpFromFile(const char* filename, int16_t xMove, int16_t yMo
   if(read16(bmpFile) != 1) goto cleanup; // Check # planes -- must be '1'
   bmpDepth = read16(bmpFile); // bits per pixel
   DEBUG_MINI_GRAFX("Bit Depth: %d\n", bmpDepth);
-  //if((read32(bmpFile) != 0)) goto cleanup; // Check 0 = uncompressed
+  if((read32(bmpFile) != 0)) goto cleanup; // Check 0 = uncompressed
 
   goodBmp = true; // Supported BMP format -- proceed!
   //DEBUG_MINI_GRAFX("Image size: %dx%d\n", bmpWidth, bmpHeight);
@@ -685,7 +714,22 @@ void MiniGrafx::drawBmpFromFile(const char* filename, int16_t xMove, int16_t yMo
   w = bmpWidth;
   h = bmpHeight;
   s = 0;
-  if ((writeMode & DRAW_DIRECT) != 0) {
+
+  // Fix row/column variables for xMove,yMove is offscreen
+  
+  if (xMove < 0) {
+    colStart = -xMove;
+    w += colStart;
+    xMove = 0;
+  }
+  if (yMove < 0) {
+    rowStart = -yMove;
+    h -= rowStart;
+    s -= rowStart;
+    yMove = 0;
+  }
+
+  if (writeMode & DRAW_DIRECT) {
     if((xMove+w-1) >= initialWidth)  {
       w = initialWidth  - xMove;
     }
@@ -702,7 +746,8 @@ void MiniGrafx::drawBmpFromFile(const char* filename, int16_t xMove, int16_t yMo
       s = bmpHeight - h;
     }
   }
-  if ((writeMode & DRAW_TO_CACHE) != 0) {
+  
+  if (writeMode & DRAW_TO_CACHE) {
     rowBuffer = (uint16_t*)malloc(w * 2 * h); // Allocate whole image buffer
     if (flip)
       rowOffset = w * (h - 1);
@@ -713,9 +758,11 @@ void MiniGrafx::drawBmpFromFile(const char* filename, int16_t xMove, int16_t yMo
   if ((bmpDepth == 24)) {
     rowSize = (bmpWidth * 3 + 3) & ~3;
     bufSize = (w * 3 + 3) & ~3;
+    colStart *= 3;
   } else if (bmpDepth == 16) {
     rowSize = (bmpWidth * 2 + 2) & ~3;
     bufSize = (w * 2 + 2) & ~3;
+    colStart *= 2;
   } else {
     goto cleanup;
   }
@@ -723,6 +770,7 @@ void MiniGrafx::drawBmpFromFile(const char* filename, int16_t xMove, int16_t yMo
   if (!sdbuffer) goto cleanup;
   pos = bmpImageoffset; // Set initial image position in file
   if(flip) pos += s * rowSize; // Skip first-stored bottom lines in case of reverce order 
+  else pos += rowStart * rowSize; // Skip offscreen rows
   for (row=0; row<h; row++) { // For each scanline...
     // Seek to start of scan line.  It might seem labor-
     // intensive to be doing this on every line, but this
@@ -733,7 +781,7 @@ void MiniGrafx::drawBmpFromFile(const char* filename, int16_t xMove, int16_t yMo
     if(bmpFile.position() != pos) // Need seek?
       bmpFile.seek(pos, SeekSet);
     bmpFile.read(sdbuffer, bufSize); // Read full line (Cropped if needed).
-    buffidx = 0; // Set index to beginning
+    buffidx = colStart; // Set index to beginning
     for (col=0; col<w; col++) { // For each pixel...
       uint16_t color;
       if (bmpDepth == 24) {
@@ -741,10 +789,11 @@ void MiniGrafx::drawBmpFromFile(const char* filename, int16_t xMove, int16_t yMo
         b = sdbuffer[buffidx++];
         g = sdbuffer[buffidx++];
         r = sdbuffer[buffidx++];
-        if ((writeMode & DRAW_DIRECT) != 0 || bitsPerPixel == 16) {
+        if ((writeMode & DRAW_DIRECT) || bitsPerPixel == 16) {
           color = ((r & 0x00F8) << 8) | ((g & 0x00FC) << 3) | ((b & 0x00F8) >> 3);
-          //setColor(color);
-        } else {
+          setColor(color);
+        }
+        if ((writeMode & DRAW_TO_BUFFER) && !(bitsPerPixel == 16)) {
           uint32_t minDistance = 99999999L;
           for (int i = 0; i < (1 << bitsPerPixel); i++) {
             int16_t rd = (r-paletteRGB[i][0]);
@@ -758,19 +807,20 @@ void MiniGrafx::drawBmpFromFile(const char* filename, int16_t xMove, int16_t yMo
           }
         }
       } else if (bmpDepth == 16) {
-        if ((writeMode & (DRAW_DIRECT | DRAW_TO_CACHE)) != 0 || bitsPerPixel == 16) {
+        if ((writeMode & (DRAW_DIRECT | DRAW_TO_CACHE)) || bitsPerPixel == 16) {
           color = sdbuffer[buffidx++] | sdbuffer[buffidx++] << 8;
           //setColor(color);
         }
       }
-      if ((writeMode & (DRAW_DIRECT | DRAW_TO_CACHE)) != 0) {
+      if (writeMode & (DRAW_DIRECT | DRAW_TO_CACHE)) {
         rowBuffer[col + rowOffset] = __bswap_16(color);
-      } else {
+      }
+      if (writeMode & DRAW_TO_BUFFER) {
         setPixel(col + xMove, row + yMove);
       }
     } // end pixel
-    if ((writeMode & DRAW_DIRECT) != 0) {
-      if ((writeMode & DRAW_TO_CACHE) == 0) {
+    if (writeMode & DRAW_DIRECT) {
+      if (!(writeMode & DRAW_TO_CACHE)) {
         this->driver->writeBuffer((uint8_t*)rowBuffer, 16, nullptr, xMove, yMove+(flip?h-row:row), w, 1);
       } else {
         if (flip)
@@ -781,8 +831,7 @@ void MiniGrafx::drawBmpFromFile(const char* filename, int16_t xMove, int16_t yMo
     }
     pos += rowSize;
   } // end scanline
-  if ((writeMode & DRAW_DIRECT) != 0)
-   if ((writeMode & DRAW_TO_CACHE) != 0)
+  if ((writeMode & DRAW_DIRECT) && (writeMode & DRAW_TO_CACHE))
     this->driver->writeBuffer((uint8_t*)rowBuffer, 16, nullptr, xMove, yMove, w, h);
   cleanup:
   free(sdbuffer);
