@@ -695,7 +695,7 @@ void MiniGrafx::drawBmpFromFile(const char* filename, int16_t xMove, int16_t yMo
   if(read16(bmpFile) != 1) goto cleanup; // Check # planes -- must be '1'
   bmpDepth = read16(bmpFile); // bits per pixel
   DEBUG_MINI_GRAFX("Bit Depth: %d\n", bmpDepth);
-  if((read32(bmpFile) != 0)) goto cleanup; // Check 0 = uncompressed
+  //if((read32(bmpFile) != 0)) goto cleanup; // Check 0 = uncompressed
 
   goodBmp = true; // Supported BMP format -- proceed!
   //DEBUG_MINI_GRAFX("Image size: %dx%d\n", bmpWidth, bmpHeight);
@@ -719,7 +719,7 @@ void MiniGrafx::drawBmpFromFile(const char* filename, int16_t xMove, int16_t yMo
   
   if (xMove < 0) {
     colStart = -xMove;
-    w -= colStart;
+    //w += colStart;
     xMove = 0;
   }
   if (yMove < 0) {
@@ -769,8 +769,8 @@ void MiniGrafx::drawBmpFromFile(const char* filename, int16_t xMove, int16_t yMo
   sdbuffer = (uint8_t*)malloc(bufSize);
   if (!sdbuffer) goto cleanup;
   pos = bmpImageoffset; // Set initial image position in file
-  if(flip) pos += s * rowSize; // Skip first-stored bottom lines in case of reverce order 
-  else pos += rowStart * rowSize; // Skip offscreen rows
+  if(flip) pos += s * rowSize + colStart; // Skip first-stored bottom lines in case of reverce order 
+  else pos += rowStart * rowSize + colStart; // Skip offscreen rows
   for (row=0; row<h; row++) { // For each scanline...
     // Seek to start of scan line.  It might seem labor-
     // intensive to be doing this on every line, but this
@@ -781,7 +781,7 @@ void MiniGrafx::drawBmpFromFile(const char* filename, int16_t xMove, int16_t yMo
     if(bmpFile.position() != pos) // Need seek?
       bmpFile.seek(pos, SeekSet);
     bmpFile.read(sdbuffer, bufSize); // Read full line (Cropped if needed).
-    buffidx = colStart; // Set index to beginning
+    buffidx = 0; // Set index to beginning
     for (col=0; col<w; col++) { // For each pixel...
       uint16_t color;
       if (bmpDepth == 24) {
